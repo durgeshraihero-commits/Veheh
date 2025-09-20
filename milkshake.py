@@ -275,21 +275,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-Updated requirements.txt:
-
-```txt
-python-telegram-bot==13.7
-requests==2.31.0
-Flask==2.3.3
-```
-
-Changes made:
-
-1. Removed httpx - Using regular requests library instead
-2. Made check_site_embeddable synchronous - Removed async/await
-3. Kept all other functions exactly the same
-4. Used compatible python-telegram-bot version (13.7 instead of 20.7)
-
-This should work without the 502 error! 🚀
