@@ -8,4 +8,4 @@ services:
     envVars:
       - key: PORT
         value: 10000
-    pythonVersion: "3.11.9"  # Add this line
+    pythonVersion: "3.11.9"
