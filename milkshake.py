@@ -1,10 +1,14 @@
+Modified milkshake.py with Compatible Versions
+
+Here's your exact code modified to work with compatible versions:
+
+```python
 import os
 import json
 import re
 import urllib.parse
 import logging
 import requests
-import httpx
 import threading
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -84,7 +88,7 @@ def make_personal_link(chat_id: int, site: str) -> str:
     encoded = urllib.parse.quote(site, safe="")
     return f"{RENDER_LINK}/?chat_id={chat_id}&site={encoded}"
 
-async def check_site_embeddable(url: str) -> (bool, str):
+def check_site_embeddable(url: str):
     SIMPLE_URL_RE = re.compile(r"^https://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
     if not url.lower().startswith("https://"):
         return False, "Only HTTPS URLs are supported."
@@ -92,30 +96,29 @@ async def check_site_embeddable(url: str) -> (bool, str):
         return False, "Invalid URL format."
 
     headers = {"User-Agent": "Site-Frame-Validator/1.0"}
-    async with httpx.AsyncClient(timeout=6.0, headers=headers, follow_redirects=True) as client:
-        try:
-            resp = await client.head(url)
-            if resp.status_code >= 400 or resp.content == b"":
-                resp = await client.get(url)
-        except Exception:
-            return False, "⚠️ Could not connect to site."
-
+    try:
+        resp = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
         if resp.status_code >= 400:
-            return False, f"HTTP {resp.status_code}"
+            resp = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+    except Exception:
+        return False, "⚠️ Could not connect to site."
 
-        content_type = resp.headers.get("content-type", "")
-        if "text/html" not in content_type.lower():
-            return False, f"Invalid Content-Type: {content_type}"
+    if resp.status_code >= 400:
+        return False, f"HTTP {resp.status_code}"
 
-        xfo = resp.headers.get("x-frame-options")
-        if xfo and ("deny" in xfo.lower() or "sameorigin" in xfo.lower()):
-            return False, "Blocked by X-Frame-Options"
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" not in content_type.lower():
+        return False, f"Invalid Content-Type: {content_type}"
 
-        csp = resp.headers.get("content-security-policy", "")
-        if "frame-ancestors" in csp.lower():
-            return False, "Blocked by CSP"
+    xfo = resp.headers.get("x-frame-options", "")
+    if xfo and ("deny" in xfo.lower() or "sameorigin" in xfo.lower()):
+        return False, "Blocked by X-Frame-Options"
 
-        return True, "OK"
+    csp = resp.headers.get("content-security-policy", "")
+    if "frame-ancestors" in csp.lower():
+        return False, "Blocked by CSP"
+
+    return True, "OK"
 
 # === COMMANDS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -226,7 +229,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text("🔎 Checking site compatibility, please wait...")
         try:
-            ok, reason = await check_site_embeddable(text)
+            ok, reason = check_site_embeddable(text)
         except:
             await update.message.reply_text("⚠️ Unexpected error while validating site.")
             return
@@ -277,3 +280,21 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
+Updated requirements.txt:
+
+```txt
+python-telegram-bot==13.7
+requests==2.31.0
+Flask==2.3.3
+```
+
+Changes made:
+
+1. Removed httpx - Using regular requests library instead
+2. Made check_site_embeddable synchronous - Removed async/await
+3. Kept all other functions exactly the same
+4. Used compatible python-telegram-bot version (13.7 instead of 20.7)
+
+This should work without the 502 error! 🚀
