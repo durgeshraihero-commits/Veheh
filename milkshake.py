@@ -1,8 +1,3 @@
-Modified milkshake.py with Compatible Versions
-
-Here's your exact code modified to work with compatible versions:
-
-```python
 import os
 import json
 import re
