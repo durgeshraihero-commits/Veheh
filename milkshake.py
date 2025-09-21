@@ -29,7 +29,7 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # === CONFIGURATION ===
-BOT_TOKEN = "8307999302:AAFk0WOKT_6tzuDs0h4FvGtpnMiguecj54Q"
+BOT_TOKEN = "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ"
 API_KEY = "6314556756:1UsetVvV"
 LANG = "ru"
 LIMIT = 300
