@@ -448,4 +448,120 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if bal < COST_TRACK:
             await update.message.reply_text("⚠️ Not enough balance. Please recharge first.")
             return
-        context.user_data["awaitin
+        context.user_data["awaiting_track"] = False
+        user_balances[user_id] -= COST_TRACK
+
+        await update.message.reply_text("🔎 Checking site compatibility, please wait...")
+        try:
+            ok, reason = check_site_embeddable(text)
+        except:
+            await update.message.reply_text("⚠️ Unexpected error while validating site.")
+            return
+
+        if not ok:
+            await update.message.reply_text(f"❌ Cannot embed site: {reason}")
+            return
+
+        personal = make_personal_link(user_id, text)
+        await update.message.reply_text(
+            f"✅ Site is valid!\n\nHere's your personal tracking link:\n\n<code>{personal}</code>\n\n"
+            f"🤖 <i>Tracking technology provided by Drhero!</i>",
+            parse_mode="HTML"
+        )
+        return
+
+    # AI Chat Mode - Process natural language
+    if context.user_data.get("ai_chat_active") or not (context.user_data.get("awaiting_lookup") or context.user_data.get("awaiting_track")):
+        # Check if it's a direct command pattern (phone/email/URL)
+        phone_pattern = r'(\+91\d{10}|\b\d{10}\b)'
+        email_pattern = r'\b[\w\.-]+@[\w\.-]+\.\w+\b'
+        url_pattern = r'https?://[^\s]+'
+        
+        if re.search(phone_pattern, text) or re.search(email_pattern, text):
+            # Direct phone/email lookup request
+            bal = user_balances.get(user_id, 0)
+            if bal >= COST_LOOKUP:
+                user_balances[user_id] -= COST_LOOKUP
+                await update.message.reply_text("🔍 I found a phone/email in your message! Processing search...")
+                result = generate_report(text)
+                for chunk in [result[i:i+4000] for i in range(0, len(result), 4000)]:
+                    await update.message.reply_text(chunk, parse_mode="HTML")
+            else:
+                await update.message.reply_text(
+                    f"🔍 I see you want to search! But you need {COST_LOOKUP - bal} more credits. "
+                    f"Please recharge using /buy\n\n🤖 <i>Drhero's AI at your service!</i>",
+                    parse_mode="HTML"
+                )
+            return
+        
+        elif re.search(url_pattern, text):
+            # Direct URL tracking request
+            bal = user_balances.get(user_id, 0)
+            if bal >= COST_TRACK:
+                user_balances[user_id] -= COST_TRACK
+                await update.message.reply_text("🌍 I found a URL! Processing website tracking...")
+                try:
+                    ok, reason = check_site_embeddable(text)
+                    if ok:
+                        personal = make_personal_link(user_id, text)
+                        await update.message.reply_text(
+                            f"✅ Tracking link created!\n\n<code>{personal}</code>\n\n"
+                            f"🤖 <i>Powered by Drhero's brilliant technology!</i>",
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await update.message.reply_text(f"❌ Cannot track this site: {reason}")
+                except:
+                    await update.message.reply_text("⚠️ Error processing website.")
+            else:
+                await update.message.reply_text(
+                    f"🌍 I see a website! But you need {COST_TRACK - bal} more credits. "
+                    f"Please recharge using /buy\n\n🤖 <i>Drhero's AI ready to help!</i>",
+                    parse_mode="HTML"
+                )
+            return
+        
+        else:
+            # General AI conversation including knowledge questions
+            ai_response = ai_manager.generate_ai_response(text, user_id, user_balances)
+            await update.message.reply_text(ai_response, parse_mode="HTML")
+            return
+
+# === Buttons ===
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "buy":
+        await buy(update, context)
+    elif query.data == "balance":
+        await balance(update, context)
+    elif query.data == "service_lookup":
+        await service_lookup(update, context)
+    elif query.data == "service_track":
+        await service_track(update, context)
+    elif query.data == "ai_chat":
+        await ai_chat_mode(update, context)
+
+# === MAIN ===
+def main():
+    # Start web server in a separate thread
+    server_thread = threading.Thread(target=run_web_server, daemon=True)
+    server_thread.start()
+    
+    # Start Telegram bot
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("approve", approve))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(button_handler))
+
+    # forward payment proofs
+    application.add_handler(MessageHandler(filters.PHOTO, lambda u, c: u.message.forward(ADMIN_ID)))
+    application.add_handler(MessageHandler(filters.Document.ALL, lambda u, c: u.message.forward(ADMIN_ID)))
+
+    print("🤖 AI-Powered Knowledge Bot is running with web server...")
+    print("🚀 Developed by the amazing Drhero!")
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
