@@ -30,7 +30,7 @@ def run_web_server():
 
 # === CONFIGURATION ===
 BOT_TOKEN = "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ"
-API_KEY = "6314556756:1UsetVvV"
+API_KEY = "5210628714:lMkRuCeC"
 LANG = "ru"
 LIMIT = 300
 URL = "https://leakosintapi.com/"
