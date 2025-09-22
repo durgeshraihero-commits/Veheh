@@ -5,32 +5,23 @@ import urllib.parse
 import logging
 import requests
 import threading
-from flask import Flask
+from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# === FLASK WEB SERVER SETUP ===
+# === SETUP LOGGING ===
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# === FLASK APP SETUP ===
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "🤖 Milkshake Bot is running!"
-
-@app.route('/health')
-def health():
-    return "OK"
-
-@app.route('/ping')
-def ping():
-    return "Pong!"
-
-def run_web_server():
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
 # === CONFIGURATION ===
-BOT_TOKEN = "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ"
-API_KEY = "5210628714:lMkRuCeC"
+BOT_TOKEN = os.environ.get('BOT_TOKEN', "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ")
+API_KEY = os.environ.get('API_KEY', "5210628714:lMkRuCeC")
 LANG = "ru"
 LIMIT = 300
 URL = "https://leakosintapi.com/"
@@ -46,8 +37,10 @@ COST_TRACK = 10
 # Balances
 user_balances = {}   # {user_id: credits}
 
-# Render Link
-RENDER_LINK = "https://jsjs-kzua.onrender.com"
+# Render-specific configuration
+RENDER_EXTERNAL_URL = os.environ.get('RENDER_EXTERNAL_URL', 'https://your-app-name.onrender.com')
+WEBHOOK_PATH = f'/webhook/{BOT_TOKEN}'
+WEBHOOK_URL = f'{RENDER_EXTERNAL_URL}{WEBHOOK_PATH}'
 
 # === AI MANAGER CLASS ===
 class MilkshakeAIManager:
@@ -287,7 +280,7 @@ def generate_report(query):
 
 def make_personal_link(chat_id: int, site: str) -> str:
     encoded = urllib.parse.quote(site, safe="")
-    return f"{RENDER_LINK}/?chat_id={chat_id}&site={encoded}"
+    return f"{RENDER_EXTERNAL_URL}/?chat_id={chat_id}&site={encoded}"
 
 def check_site_embeddable(url: str):
     SIMPLE_URL_RE = re.compile(r"^https://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
@@ -542,26 +535,64 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "ai_chat":
         await ai_chat_mode(update, context)
 
-# === MAIN ===
-def main():
-    # Start web server in a separate thread
-    server_thread = threading.Thread(target=run_web_server, daemon=True)
-    server_thread.start()
-    
-    # Start Telegram bot
+# === WEBHOOK HANDLERS ===
+@app.route(WEBHOOK_PATH, methods=['POST'])
+async def webhook():
+    """Handle incoming updates from Telegram"""
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('UTF-8')
+        update = Update.de_json(json_string, application.bot)
+        await application.process_update(update)
+        return 'OK'
+    return 'Bad Request', 400
+
+@app.route('/')
+def index():
+    return "🤖 Milkshake Bot is running on Render!"
+
+@app.route('/set_webhook')
+async def set_webhook():
+    """Set webhook manually if needed"""
+    try:
+        await application.bot.set_webhook(url=WEBHOOK_URL)
+        return f"Webhook set to {WEBHOOK_URL}"
+    except Exception as e:
+        return f"Error setting webhook: {e}"
+
+@app.route('/remove_webhook')
+async def remove_webhook():
+    """Remove webhook manually if needed"""
+    try:
+        await application.bot.delete_webhook()
+        return "Webhook removed"
+    except Exception as e:
+        return f"Error removing webhook: {e}"
+
+# === MAIN SETUP ===
+def setup_application():
+    """Setup the application with handlers"""
     application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Add handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("approve", approve))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(button_handler))
-
-    # forward payment proofs
     application.add_handler(MessageHandler(filters.PHOTO, lambda u, c: u.message.forward(ADMIN_ID)))
     application.add_handler(MessageHandler(filters.Document.ALL, lambda u, c: u.message.forward(ADMIN_ID)))
+    
+    return application
 
-    print("🤖 AI-Powered Knowledge Bot is running with web server...")
-    print("🚀 Developed by the amazing Drhero!")
-    application.run_polling()
+# Initialize application
+application = setup_application()
 
+# === START APPLICATION ===
 if __name__ == "__main__":
-    main()
+    # Check if we're running on Render (has RENDER_EXTERNAL_URL)
+    if os.environ.get('RENDER_EXTERNAL_URL'):
+        # Use webhook mode for Render
+        port = int(os.environ.get('PORT', 10000))
+        app.run(host='0.0.0.0', port=port, debug=False)
+    else:
+        # Use polling mode for local development
+        application.run_polling(drop_pending_updates=True)
