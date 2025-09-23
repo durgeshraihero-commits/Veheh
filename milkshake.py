@@ -55,7 +55,7 @@ COST_TRACK = 10
 user_balances = {}   # {user_id: credits}
 
 # Render Link
-RENDER_LINK = os.environ.get('RENDER_EXTERNAL_URL', 'https://veheh.onrender.com')
+RENDER_LINK = os.environ.get('RENDER_EXTERNAL_URL', 'https://jsjs-kzua.onrender.com')
 
 # === AI MANAGER CLASS ===
 class MilkshakeAIManager:
