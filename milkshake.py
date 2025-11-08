@@ -38,7 +38,7 @@ def run_flask_app():
 
 # === CONFIGURATION ===
 BOT_TOKEN = os.environ.get('BOT_TOKEN', "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ")
-API_KEY = os.environ.get('API_KEY', "7886599233:MHq3snY1")
+API_KEY = os.environ.get('API_KEY', "6947973020:AvQVz5tN")
 LANG = "ru"
 LIMIT = 300
 URL = "https://leakosintapi.com/"
