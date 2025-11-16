@@ -234,7 +234,7 @@ def check_site_embeddable(url: str):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     keyboard = [
-        [InlineKeyboardButton("🔍 Search Phone/Email", callback_data="service_lookup")],
+        [InlineKeyboardButton("🔍 Search Phone or Email", callback_data="service_lookup")],
         [InlineKeyboardButton("🌍 Track Website", callback_data="service_track")],
         [InlineKeyboardButton("💳 Add Balance", callback_data="buy")],
         [InlineKeyboardButton("💰 Check Balance", callback_data="balance")],
@@ -384,7 +384,7 @@ def main():
     application.add_error_handler(error_handler)
     
     logger.info("🤖 Bot is ready! Using polling mode...")
-    logger.info("🚀 Developed by Drhero!")
+    logger.info("🚀 Developed by Durgesh hero!")
     
     # Start polling with error handling
     try:
