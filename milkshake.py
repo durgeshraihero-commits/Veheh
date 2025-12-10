@@ -7,7 +7,7 @@ import requests
 import threading
 from flask import Flask
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # === SETUP LOGGING ===
 logging.basicConfig(
@@ -51,8 +51,8 @@ def make_personal_link(chat_id: int, site: str) -> str:
 def check_site_embeddable(url: str):
     """Check if a website can be tracked"""
     try:
-        if not url.lower().startswith("https://"):
-            return False, "Only HTTPS URLs supported"
+        if not url.lower().startswith(("https://", "http://")):
+            return False, "URL must start with http:// or https://"
         
         headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
@@ -67,31 +67,104 @@ def check_site_embeddable(url: str):
     except Exception as e:
         return False, f"Connection error: {e}"
 
-# === MESSAGE HANDLER ===
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle messages containing '2/' followed by a link"""
+def extract_url_from_text(text: str):
+    """Extract URL from text"""
+    # Pattern to match URLs
+    url_pattern = r'(https?://[^\s]+)'
+    match = re.search(url_pattern, text)
+    if match:
+        return match.group(1)
+    return None
+
+# === COMMAND HANDLERS ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /start command"""
+    user = update.effective_user
+    chat_type = update.effective_chat.type
     
-    # Ignore if message is None
+    if chat_type == "private":
+        await update.message.reply_text(
+            f"👋 <b>Welcome {user.first_name}!</b>\n\n"
+            "🔗 <b>Link Tracker Bot</b>\n\n"
+            "📌 <b>How to use:</b>\n"
+            "Send: <code>/link https://example.com</code>\n\n"
+            "✨ Add me to a group and I'll track links there too!",
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            "✅ Bot is active in this group!\n\n"
+            "Use: <code>/link https://example.com</code>",
+            parse_mode="HTML"
+        )
+
+async def link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /link command"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    # Get the text after /link command
+    if context.args:
+        url = context.args[0]
+    else:
+        # Check if there's text in the message
+        message_text = update.message.text
+        # Extract URL from the message
+        url = extract_url_from_text(message_text)
+        
+        if not url:
+            await update.message.reply_text(
+                "⚠️ Please provide a URL!\n\n"
+                "Usage: <code>/link https://example.com</code>",
+                parse_mode="HTML"
+            )
+            return
+    
+    logger.info(f"Processing link command from user {user_id} in chat {chat_id}: {url}")
+    
+    # Send processing message
+    processing_msg = await update.message.reply_text(f"🌍 Processing link: {url}...")
+    
+    # Check if site is trackable
+    ok, reason = check_site_embeddable(url)
+    if not ok:
+        await processing_msg.edit_text(f"❌ Cannot track this link: {reason}")
+        return
+    
+    # Generate personal tracking link
+    personal = make_personal_link(user_id, url)
+    
+    # Send the tracking link
+    await processing_msg.edit_text(
+        f"✅ Your tracking link:\n\n{personal}",
+        disable_web_page_preview=True
+    )
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle regular messages containing links"""
+    
+    # Ignore if message is None or is a command
     if not update.message or not update.message.text:
         return
     
     text = update.message.text.strip()
+    
+    # Ignore command messages (they're handled separately)
+    if text.startswith('/'):
+        return
+    
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     
-    logger.info(f"Received message in chat {chat_id} from user {user_id}: {text}")
+    logger.info(f"Received message in chat {chat_id} from user {user_id}: {text[:50]}...")
     
-    # Check if message contains "2/" followed by a URL
-    # Pattern: "2/" followed by a valid URL
-    pattern = r'/\s*(https?://[^\s]+)'
-    match = re.search(pattern, text, re.IGNORECASE)
+    # Extract URL from the message
+    url = extract_url_from_text(text)
     
-    if not match:
-        # Ignore messages that don't match the pattern
+    if not url:
+        # No URL found, ignore the message
         return
     
-    # Extract the URL
-    url = match.group(1)
     logger.info(f"Found URL to track: {url}")
     
     # Send processing message
@@ -115,6 +188,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === ERROR HANDLER ===
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
+    if update and update.effective_message:
+        try:
+            await update.effective_message.reply_text("❌ An error occurred. Please try again.")
+        except:
+            pass
 
 # === MAIN ===
 def main():
@@ -127,7 +205,11 @@ def main():
     # Create bot application
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Add handler for text messages in groups and private chats
+    # Add command handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("link", link_command))
+    
+    # Add handler for text messages (links in regular messages)
     application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND, 
         handle_message
@@ -136,13 +218,17 @@ def main():
     application.add_error_handler(error_handler)
     
     logger.info("🤖 Bot is ready! Using polling mode...")
-    logger.info("📌 Bot will respond to messages containing '2/' followed by a link")
+    logger.info("📌 Commands: /start, /link <url>")
+    logger.info("📌 Also responds to any message containing a URL")
     
     # Start polling with error handling
     try:
         application.run_polling(
             drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
+            allowed_updates=Update.ALL_TYPES,
+            pool_timeout=30,
+            connect_timeout=30,
+            read_timeout=30
         )
     except Exception as e:
         logger.error(f"Fatal error: {e}")
