@@ -37,7 +37,7 @@ def run_flask_app():
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # === CONFIGURATION ===
-BOT_TOKEN = os.environ.get('BOT_TOKEN', "8307999302:AAGc6sLGoklnbpWsXg76lcdQcVAzGgsp8cQ")
+BOT_TOKEN = os.environ.get('BOT_TOKEN', "8307999302:AAEniYvTP5ZeaYo74AcWSxsOQ9PSxpnAtA0")
 
 # Render Link
 RENDER_LINK = 'https://jsjs-kzua.onrender.com'
