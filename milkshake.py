@@ -83,7 +83,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Check if message contains "2/" followed by a URL
     # Pattern: "2/" followed by a valid URL
-    pattern = r'2/\s*(https?://[^\s]+)'
+    pattern = r'/\s*(https?://[^\s]+)'
     match = re.search(pattern, text, re.IGNORECASE)
     
     if not match:
